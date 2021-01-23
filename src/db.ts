@@ -1,5 +1,5 @@
 const AWS = require("aws-sdk");
-const fs = require("fs");
+
 // Set the region
 AWS.config.update({
   accessKeyId: process.env.AWS_ACCESS_KEY_ID,
@@ -9,18 +9,7 @@ AWS.config.update({
 });
 const db = new AWS.DynamoDB.DocumentClient();
 
-async function readFile(path) {
-  return new Promise((resolve) => {
-    fs.readFile(`/tmp/${path}`, "utf8", (err, data) => {
-      if (err) {
-        resolve(null);
-      }
-      resolve(data);
-    });
-  });
-}
-async function get(id) {
-  const cached = await readFile(id);
+async function get(id: string) {
   const params = {
     TableName: "ddb",
     KeyConditionExpression: "tip = :hkey",
@@ -30,20 +19,14 @@ async function get(id) {
     ScanIndexForward: false,
   };
   return new Promise((resolve) => {
-    if (!cached) {
-      db.query(params, function (err, data) {
-        const x = data.Count >= 1 ? data.Items[0] : {};
-        fs.writeFile(`/tmp/${id}`, JSON.stringify(x), function () {
-          resolve(x);
-        });
-      });
-    } else {
-      resolve({ ...JSON.parse(cached), cached: true });
-    }
+    db.query(params, (err: any, data: { Count: number; Items: any[] }) => {
+      const x = data.Count >= 1 ? data.Items[0] : {};
+      resolve(x);
+    });
   });
 }
 
-function put(json) {
+function put(json: object) {
   return new Promise((resolve) => {
     db.put({ TableName: "ddb", Item: json }, function () {
       resolve({});
@@ -51,7 +34,17 @@ function put(json) {
   });
 }
 
-async function q1({ fields, collection, descending, limit }) {
+async function q1({
+  fields,
+  collection,
+  descending,
+  limit,
+}: {
+  fields: any;
+  collection: string;
+  descending: boolean;
+  limit: number;
+}) {
   const params = {
     TableName: "ddb",
     KeyConditionExpression: "tip = :hkey  and vreme >= :zkey",
@@ -64,12 +57,11 @@ async function q1({ fields, collection, descending, limit }) {
     Limit: limit || 100,
     ScanIndexForward: descending || true,
     ReturnConsumedCapacity: "TOTAL",
+    ProjectionExpression: fields || undefined,
   };
-  if (fields) {
-    params.ProjectionExpression = fields;
-  }
+
   return new Promise((resolve) => {
-    db.query(params, (err, data) => {
+    db.query(params, (err: any, data: { Count: number; Items: any[] }) => {
       if (data.Count === 1) {
         resolve(data.Items[0]);
       }
@@ -78,7 +70,21 @@ async function q1({ fields, collection, descending, limit }) {
   });
 }
 
-async function query({ id, collection, limit, descending, count, fields }) {
+async function query<T>({
+  id,
+  collection,
+  limit,
+  descending,
+  count,
+  fields,
+}: {
+  id: string;
+  collection: string;
+  limit: number;
+  descending?: boolean;
+  count?: number;
+  fields?: object;
+}) {
   const params = {
     TableName: "ddb",
     KeyConditionExpression: "tip = :hkey and vreme >= :ukey",
@@ -89,15 +95,12 @@ async function query({ id, collection, limit, descending, count, fields }) {
     Limit: limit || 100,
     ScanIndexForward: descending || false,
     ReturnConsumedCapacity: "TOTAL",
+    ProjectionExpression: fields || undefined,
+    Select: count ? "COUNT" : undefined,
   };
-  if (fields) {
-    params.ProjectionExpression = fields;
-  }
-  if (count) {
-    params.Select = "COUNT";
-  }
+
   return new Promise((resolve) => {
-    db.query(params, (err, data) => {
+    db.query(params, (err: any, data: { Count: number; Items: any[] }) => {
       if (data.Count === 1) {
         resolve(data.Items[0]);
       }
