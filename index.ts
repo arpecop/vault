@@ -22,7 +22,7 @@ if (cluster.isMaster) {
   app.use(bodyParser.json());
 
   const { put, query } = require("./src/db");
-
+  const { timeline } = require("./src/twitter");
   app.post(
     "/db/",
     async (req, res): Promise<void> => {
@@ -38,6 +38,48 @@ if (cluster.isMaster) {
     }
   );
 
+  app.get("/t/:time/:id", async (req, res) => {
+    const { time, id } = req.params;
+
+    const data = await query({
+      id: Math.round(time),
+      collection: "t",
+      limit: 10,
+      descending: true,
+    });
+
+    const tweets = await timeline(id);
+
+    const user = tweets[0]
+      ? tweets[0].user
+      : {
+          profile_image_url_https: `http://twivatar.glitch.me/${id}`,
+          profile_background_color: "black",
+        };
+
+    const tags = tweets[0]
+      ? tweets
+          .map((item) => item.text)
+          .join(" ")
+          .split(" ")
+          .filter(function (n) {
+            if (/#/.test(n)) return n.replace("#", "");
+          })
+      : [];
+
+    const jsonOutput = {
+      Items: [],
+      ...data,
+      tweets,
+      user,
+      tags,
+      // tweets_stringified: JSON.stringify(tweets, null, 4),
+      ...req.params,
+    };
+
+    res.header("Content-Type", "application/json");
+    res.json(jsonOutput);
+  });
   app.listen(process.env.PORT || 3000);
 
   // dsds
